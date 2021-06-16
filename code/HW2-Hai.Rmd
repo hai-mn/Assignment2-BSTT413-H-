@@ -1,0 +1,406 @@
+---
+title: "Assignment 2 - Hai(TA)'s solution"
+author: "Hai Nguyen"
+date: "6/9/2021"
+knit: (function(input, ...) {
+    rmarkdown::render(
+      input,
+      output_file = paste0(
+        xfun::sans_ext(input), '-', Sys.Date(), '.html'
+      ),
+      output_dir = "../Output"
+    )
+  })
+  
+output: 
+  rmarkdown::html_document:
+    #number_sections: true
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    #code_folding: show
+    smart: true
+    theme: journal
+    hightlight: pygments
+    df_print: paged
+---
+
+```{r, warning=F, message=F}
+library(tidyverse)
+library(janitor)
+library(pubh)
+library(sjlabelled)
+```
+
+In Homework 1, you were tasked with analyzing NHANES data to explore the relationships between metabolic syndrome (MetS), sleep duration, and a range of demographic variables using the approaches in Smiley et al. (2019) and Moore et al. (2017). In this assignment, we will build on that analysis to further investigate these relationships.  
+
+```{r}
+nhanes.MetS <- readRDS(file = "../data/nhanesMetS.rds")
+```
+
+where the 
+
+```{r, eval=FALSE}
+#  Define sub-population of interest 
+inAnalysis = (age >=20 & 
+              ind.non_missing & 
+              ((sleep.mean-2*sleep.sd)<sleep) & (sleep<(sleep.mean+2*sleep.sd))
+              )
+```
+
+Thus, the data is for analysis would be `df`
+
+```{r}
+df <- nhanes.MetS %>% filter(inAnalysis)
+```
+
+
+# Problem 1
+
+Graphical Analysis (20 pts)  
+
+Use the appropriate ggplot2 functions, along with additional supporting methods, to generate the graphs described below. In each case, make sure that the graphs contain appropriate axes labels, titles and captions, legends, and are visually accurate.  
+
+a.	Univariate Analysis. 
+
+Generate appropriate graphs to describe the univariate characteristics of the variables MetS (binary), sleep duration, and fasting blood glucose. In the case of the latter, provide a short description of the modality (unimodal or multimodal, ie the number of peaks) and symmetry of the variable. Based on the graph, which measure of centrality is more appropriate: mean or median?  
+
+## MetS 
+
+Metabolic syndrome prevalence (unweighted): `r round(prop.table(table(df$mets.ind))[2]*100,1)`%
+
+```{r}
+mets.prop <- round(prop.table(table(df$mets.ind))*100,1)
+# Create Data
+data <- data.frame(
+  Metabolic.Syndrome=c("No","Yes"),
+  value=c(mets.prop[1],mets.prop[2]))
+
+
+# Basic piechart
+ggplot(data, aes(x="", y=value, fill=Metabolic.Syndrome)) +
+  geom_bar(stat="identity", width=1) +
+  coord_polar("y", start=0) +
+  scale_fill_manual(labels = c("No (42.3%)","Yes (57.7%)"), values=c("#33FF00","#c00000")) + 
+  theme_void() + # remove background, grid, numeric labels
+  labs(title="Proportion of Metabolic Syndrome (MetS)", subtitle= "Among NHANES study participants, cycle 2017/2018") 
+```
+
+Other solution, we can plot the bar plot instead of pie chart. (Less lots of work to manipulate the bar plot)
+
+```{r}
+ggplot(data, aes(x=Metabolic.Syndrome, y=value, fill=Metabolic.Syndrome)) +
+  geom_bar(stat="identity") + ylab("Proportion")
+  labs(title="Proportion of Metabolic Syndrome (MetS)", subtitle= "Among NHANES study participants, cycle 2017/2018") +
+  theme_bw()
+```
+
+## Sleep duration
+
+```{r}
+ggplot(df, aes(x = sleep)) +
+  geom_histogram(bins = 15, color = 'red', fill = 'lightblue') +
+  theme_bw() + xlab("Sleep (hours)") +
+  labs(title="Histogram of Sleep Hours", subtitle= "Among NHANES study participants, cycle 2017/2018", caption= "Average of workday and weekend sleep hours")
+```
+
+## Fasting blood glucose
+
+```{r}
+ggplot(df, aes(glu)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 1) +
+  theme_bw() + xlab("Fasting Blood Glucose (mg/dl)") +
+  labs(title="Box-plot of Fasting Blood Glucose", subtitle= "Among NHANES study participants, cycle 2017/2018")
+
+ggplot(df, aes(glu)) +
+  geom_histogram(bins = 15, color = 'red', fill = 'lightblue') +
+  theme_bw() + xlab("Fasting Blood Glucose (mg/dl)") +
+  labs(title="Histogram of of Fasting Blood Glucose", subtitle= "Among NHANES study participants, cycle 2017/2018")
+```
+
+
+b.	Bivariate Analysis. 
+
+(i) Compare prevalence of MetS across race/ethnicity levels. Does it appear that there is a possible racial disparity in MetS prevalence? Explain briefly. 
+
+```{r}
+Race.Ethnic.Categories <- c('Hispanic','White','Black','Asian','Multi-Racial')
+Prevalence <- c(25.1,35.5,20.7,14.0,4.7)
+r.e.p <- as_tibble(data.frame(Race.Ethnic.Categories,Prevalence))
+```
+
+```{r}
+r.e.p %>%
+  ggplot(aes(y=Prevalence, x=fct_reorder(Race.Ethnic.Categories, Prevalence))) + 
+    geom_line(aes(group=1)) +
+    geom_text(label=paste0(Prevalence,"%"), hjust=1.5, vjust=0) +
+    geom_col(width = 0.2, position = position_dodge()) +
+    theme_bw() + xlab("Race/Ethnicity") + 
+    labs(title="Proportion of MetS by Race/Ethnicity", subtitle= "Among NHANES study participants, cycle 2017/2018")
+```
+
+
+(ii) Compare the distribution of fasting blood glucose in those with MetS and those without by plotting the respective densities on a single figure. What can you glean from this?
+
+```{r}
+ggplot(df, aes(y=glu, x=factor(mets.ind))) +
+  geom_violin() +
+  theme_bw() + xlab("Metabolic Syndrome") + ylab("Fasting Blood Glucose (mg/dl)") + 
+  scale_x_discrete(labels=c("0" = "No", "1" = "Yes")) +
+  labs(title="Violin plot of Fasting Blood GLucose by Metabolic Syndrome", subtitle= "Among NHANES study participants, cycle 2017/2018")
+```
+
+# Problem 2 
+
+Bivariate Inference (20 pts)  
+
+In this problem, the primary objectives are to numerically investigate the strength and significance of associations between MetS and predictor variables. In each case, provide the appropriate measure of association and report confidence intervals or p-values where needed. For statistical significance, use alpha=0.05.  
+
+## a.	
+
+Create a contingency (2x2) table to summarize the relationship MetS and race/ethnicity. Report the odds ratio (OR) of MetS in each race category versus White (reference level) and the corresponding 95% confidence interval. Which race/ethnicity levels are have significantly disparate odds of MetS versus the reference level?  
+
+```{r}
+table(df$ethnicity)
+```
+
+- Hispanic vs. White
+
+```{r}
+df %>% 
+  select(mets.ind, ethnicity) %>% 
+  filter(ethnicity %in% c(1,0)) %>% 
+  janitor::tabyl(mets.ind, ethnicity)
+```
+
+- Black vs White
+
+```{r}
+df %>% 
+  select(mets.ind, ethnicity) %>% 
+  filter(ethnicity %in% c(2,0)) %>% 
+  janitor::tabyl(mets.ind, ethnicity)
+```
+
+```{r}
+df %>%
+  select(mets.ind, ethnicity) %>% 
+  filter(ethnicity %in% c(0,1)) %>%
+  mutate(
+    mets.ind = factor(mets.ind, labels = c("No", "Yes")),
+    ethnicity = factor(ethnicity, labels = c("Hispanic", "White"))
+  ) %>%
+    sjlabelled::var_labels(
+    mets.ind = "MetS",
+    ethnicity = "Race/Ethnic"
+  ) %>% 
+  mutate(
+    mets.ind = relevel(mets.ind, ref = "No"),
+    ethnicity = relevel(ethnicity, ref = "White")
+  ) %>%
+  contingency(mets.ind~ethnicity)
+```
+
+Here, I created a function (if you are a SAS users, it can play a role as a macro). So the function with name of `cross.tab2x2` with 2 parameters in its argument: `racevalue` and `racegroupname` where I set the value default are $0$ and "Hispanic# for 2 parameters respectively.
+
+
+```{r}
+cross.tab2x2 <- function(racevalue=0, racegroupname="Hispanic"){
+  df %>%
+  select(mets.ind, ethnicity) %>% 
+  filter(ethnicity %in% c(racevalue,1)) %>%
+  mutate(
+    mets.ind = factor(mets.ind, labels = c("No", "Yes")),
+    ethnicity = factor(ethnicity, labels = c("White", racegroupname))
+  ) %>%
+    var_labels(
+    mets.ind = "MetS",
+    ethnicity = "Race/Ethnic"
+  ) %>% 
+  mutate(
+    mets.ind = relevel(mets.ind, ref = "No"),
+    ethnicity = relevel(ethnicity, ref = "White")
+  ) %>%
+  contingency(mets.ind~ethnicity)
+}
+```
+
+
+We call function created above with changing value for parameters in the argument. For example, `cross.tab2x2(racevalue=2, racegroupname="Black")` would compare Black vs White in contingency 2x2 table
+
+```{r}
+cross.tab2x2(racevalue=2, racegroupname="Black")
+cross.tab2x2(racevalue=3, racegroupname="Asian")
+cross.tab2x2(racevalue=4, racegroupname="Multi-Racial")
+```
+
+Other way to process data:
+
+```{r}
+
+df %>%
+  mutate(ethnicity = factor(ethnicity, levels =  c(1, 0))) %>%
+  contingency(mets.ind ~ ethnicity)
+```
+To sum up, the odds ratio (OR) of MetS in each race category versus White (reference level) and the corresponding 95% confidence interval:
+
+|Other race vs White (ref.)     |   OR (95% CI)   |
+|:------------------------------|:---------------:|
+|Hispanic                       |1.02 (0.82, 1.28)|
+|Black                          |0.71 (0.57, 0.89)|
+|Asian                          |0.79 (0.61, 1.03)|
+|Multiracial                    |0.73 (0.50, 1.08)|
+
+## b.	
+
+Using t-tests or ANOVA, determine the significance of the association between MetS and (i) sleep duration; (ii) fasting blood glucose. In each case, state your conclusions.  
+
+```{r}
+t.test(sleep ~ mets.ind, data = df, alternative = "two.sided", paired = FALSE, var.equal = FALSE)
+```
+
+
+```{r}
+t.test(glu ~ mets.ind, data = df, alternative = "two.sided", paired = FALSE, var.equal = FALSE)
+```
+## c.	
+
+Use an appropriate logistic regression model to estimate the OR and 95% confidence interval for a 1 unit increase in fasting glucose. Briefly describe the effect of fasting blood glucose on the odds of MetS (is it protective or a risk factor? Is the association significant?).  
+
+```{r}
+mod <- glm(mets.ind ~ glu, family = binomial, data=df)
+summary(mod)
+## odds ratios only
+exp(coef(mod))
+## odds ratios and 95% CI
+exp(cbind(OR = coef(mod), confint(mod)))
+```
+
+# Problem 3 
+
+Multivariate Analysis (10 pts)
+
+In this problem, your task is to investigate the relationship between MetS (outcome) and sleep duration (primary exposure) while adjusting for **possible confounding variables**. 
+
+## a.	
+
+In Smiley et al., the authors show a curvilinear (quadratic) relationship between MetS prevalence and sleep duration. Reproduce similar results using the following steps: 
+
+### (i) 
+
+Regress MetS on sleep duration using logistic regression and include both linear and quadratic terms (e.g., glm(Y ~ X + I(X^2), data=df); 
+
+Check missing of response and covariates:
+
+```{r}
+sum(is.na(df$sleep))
+sum(is.na(df$ageCat))
+sum(is.na(df$ethnicity))
+sum(is.na(df$mets.ind)) #none NA of response and covariates
+```
+
+```{r}
+# convert a numeric of ethnicity to factor
+df$ethnicity <- factor(df$ethnicity, levels=c(0,1,2,3,4),
+                    labels=c("Hispanic", "White", "Black", "Asian", "Multiracial"))
+df$ethnicity <- relevel(df$ethnicity, ref = "White")
+
+fit <- glm(
+  mets.ind ~ sleep + I(sleep^2) + ageCat + ethnicity,
+  family = binomial(),
+  data = df)
+summary(fit)
+```
+
+### (ii) 
+
+use the predict() function to predict the prevalence of MetS for each subject and append it to the data frame; 
+
+```{r}
+mets.predict <- fit %>% predict(df, type = "response")
+#predict(fit, data=df, type="response")
+#mets.predict <- fit$fitted.values
+
+df$mets.predict <- mets.predict
+
+#mets.predict <- fit %>% predict(df, type = "response", se.fit=TRUE)
+```
+
+```{r, eval=F, include=F}
+saveRDS(df, file = "../data/df4analysis.rds")
+```
+
+```{r}
+psych::describe(df$mets.predict)
+```
+
+(iii) use ggplot to graph the relationship between predicted MetS prevalence and sleep duration. Do the results appear similar to those in Smiley et al., Figure 1? Briefly explain why or why not.
+
+Note: logistic regression and predict can give strange results in the presence of missing values. Therefore, it is strongly recommended that you filter out observations that are missing either MetS or sleep duration prior to modeling.
+
+```{r}
+ggplot(df, aes(x=sleep, y=mets.predict)) +
+  geom_point() + 
+  theme_bw() + 
+  ylab("Probability of Metabolic Syndrome") + xlab("Sleep (hours)") + 
+  labs(title="Scatter plot shows the relationship between predicted MetS prevalence and sleep duration", subtitle= "Among NHANES study participants, cycle 2017/2018")
+```
+
+```{r}
+ggplot(df, aes(x=sleep, y=mets.predict)) +
+  geom_point(alpha = 0.05) + # Varying alpha (points transparent) is useful for large datasets
+  theme_bw() + 
+  stat_smooth(method = "glm", 
+    method.args = list(family = "binomial"), 
+    formula = y ~ x + I(x^2), # can we add ageCat/ethinicity: nope!!!
+    se = TRUE) + # can switch to se = FALSE
+    ylab("Probability of Metabolic Syndrome") + xlab("Sleep (hours)") + 
+    labs(title="The relationship between predicted MetS prevalence and sleep duration", subtitle= "Among NHANES study participants, cycle 2017/2018")
+```
+
+~~~
+> Comments:   
+- point appeared because of the logistic regression with multiple covariates.    
+- note that I used stat_smooth (geom_smooth) to sketch the curve line from modelling of binary response on sleep and quadratic sleep term. Thus, it was actually not correct due to it was not the model which we fitted to adjusted multiple covariates (sleep, quadratic sleep term, age group and race/ethnicity).  
+- we can add SE area to the plot by setting se = TRUE in stat_smooth.   
+~~~
+
+
+A convenient way (why this one correct?? not sure):
+
+```{r}
+sjPlot::plot_model(fit, type = "pred", terms = "sleep") + 
+  theme_classic() + xlab("Sleep (hours)") + ylab("MetS Prevalence") + 
+  labs(title = "Prevalence of MetS vs. Sleep")
+```
+
+
+## b.	
+
+Bonus question (optional): Repeat the above analysis and additionally include a ribbon around the plotted line to denote the 95% confidence interval. The predict function can be used to obtain confidence intervals and the geom_ribbon function can be used to graph them.
+
+```{r}
+mets.predict.w.se <- fit %>% predict(df, type = "response", se.fit=TRUE, level = 0.95)
+```
+
+```{r}
+ggplot(df, aes(x=sleep, y=mets.predict.w.se$fit)) +
+  theme_bw() + 
+  geom_line() +
+  geom_ribbon(aes(ymin = mets.predict - 1.96*mets.predict.w.se$se.fit, ymax = mets.predict + 1.96*mets.predict.w.se$se.fit), fill = "grey70") + 
+    ylab("Probability of Metabolic Syndrome") + xlab("Sleep (hours)") + 
+    labs(title="The relationship between predicted MetS prevalence and sleep duration", subtitle= "Among NHANES study participants, cycle 2017/2018")
+```
+Why we got the plot like that? Basically, let look at the data so that we can understand:
+
+```{r}
+library(kableExtra)
+df %>% select(id, mets.ind,sleep, ageCat, ethnicity, mets.predict) %>% 
+  mutate(up.pred = mets.predict.w.se$fit + 1.96*mets.predict.w.se$se.fit,
+         l.pred = mets.predict.w.se$fit - 1.96*mets.predict.w.se$se.fit) %>% 
+  top_n(20)
+```
+
+Again, with the logistic regression with multiple covariates, we would have a large combination of all type of covariates equivalent to each sleep hour. 
+
+
